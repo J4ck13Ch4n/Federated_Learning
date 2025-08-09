@@ -5,7 +5,6 @@ tensorflow-federated==0.72.0
 # Deep Learning frameworks
 torch>=2.0.0
 torchvision>=0.15.0
-tensorflow>=2.13.0
 keras>=2.13.0
 
 # Data processing
