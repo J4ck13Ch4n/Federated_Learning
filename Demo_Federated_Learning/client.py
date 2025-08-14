@@ -47,7 +47,7 @@ def test_model():
 class FlowerClient(fl.client.NumPyClient):
     def __init__(self, cid, num_clients=10):
         self.cid = cid
-        self.trainset, self.testset = load_partition(cid, num_clients=num_clients, noniid=False, alpha=0.5)
+        self.trainset, self.testset = load_partition(cid, num_clients=num_clients, noniid=True, alpha=0.5)
         self.model = model.to(device)
         self.testloader = testloader
         # In số record & phân bố class

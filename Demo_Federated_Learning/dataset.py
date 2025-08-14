@@ -9,49 +9,80 @@ from collections import Counter
 
 # ✅ Trả về số lớp chuẩn
 def get_num_classes():
-    df = pd.read_csv("IoTDIAD.csv")
-    labels = LabelEncoder().fit_transform(df["label"])
-    return len(np.unique(labels))
+    df = pd.read_csv("IoTDIAD_sum.csv")
+    print("Các cột trong file:", df.columns.tolist())  # In ra tên các cột để debug
+    if "Label" in df.columns:
+        labels = LabelEncoder().fit_transform(df["Label"])
+        return len(set(labels))
+    else:
+        raise KeyError("Không tìm thấy cột 'Label' trong file CSV. Các cột hiện có: {}".format(df.columns.tolist()))
 
 # ✅ Load dataset chuẩn
-def load_dataset(k_features=30, test_size=0.2, random_state=42):
-    df = pd.read_csv("IoTDIAD.csv")
+def load_dataset(k_features=60, test_size=0.2, random_state=42):
+    df = pd.read_csv("IoTDIAD_sum.csv")
+
+    numeric_cols = [col for col in df.columns if df[col].dtype in ['int64', 'float64']]
+    categorical_cols = [col for col in df.columns if col not in numeric_cols]
+    print("Numeric columns:", numeric_cols)
+    print("Categorical columns:", categorical_cols)
+    
+    object_cols = df.select_dtypes(include=['object']).columns.tolist()
+    if 'Label' in object_cols:
+        object_cols.remove('Label')
+    for col in object_cols:
+        df[col] = df[col].astype('category').cat.codes
+    # Mã hóa nhãn
+    le = LabelEncoder()
+    df["Label"] = le.fit_transform(df["Label"])
+    # Xử lý thời gian
     df['Timestamp'] = pd.to_datetime(df['Timestamp'], errors='coerce')
     df = df.sort_values(by='Timestamp').reset_index(drop=True)
-
-    # Trích xuất đặc trưng thời gian
     for col in ["Year","Month","Day","Hour","Minute","Second"]:
         df[col] = getattr(df["Timestamp"].dt, col.lower())
     df.drop(columns=["Timestamp"], inplace=True)
+    object_cols = df.select_dtypes(include=['object']).columns.tolist()
+    if 'type' in object_cols:
+        object_cols.remove('type')
 
-    # Mã hóa label
-    le = LabelEncoder()
-    df["label"] = le.fit_transform(df["label"])
+    print("--- Bắt đầu điều tra các cột 'object' ---")
 
-    # Encode Flow ID, IP
-    for col in ["Flow ID", "Src IP", "Dst IP"]:
-        df[col] = df[col].astype("category").cat.codes
+    # Lặp qua TỪNG CỘT trong danh sách
+    for col in object_cols:
+        # Cố gắng chuyển đổi cột hiện tại thành số
+        numeric_series = pd.to_numeric(df[col], errors='coerce')
 
-    X = df.drop(columns=['label']).values
-    y = df['label'].values
+        # Kiểm tra xem có giá trị NaN nào được tạo ra không
+        if numeric_series.isna().any():
+            print(f"\n[!] CỘT CÓ VẤN ĐỀ: '{col}'")
+
+            # Tìm những hàng có giá trị gây lỗi
+            problematic_rows = df[numeric_series.isna()]
+
+            # In ra những giá trị rác duy nhất trong cột đó
+            garbage_values = problematic_rows[col].unique()
+            print(f"    -> Các giá trị rác tìm thấy: {garbage_values}")
+        else:
+            # Nếu không có lỗi, cột này sạch
+            print(f"\n[✓] Cột '{col}' sạch, có thể chuyển thành số.")
+
+    print("\n--- Điều tra hoàn tất ---")
+
+    X = df.drop(columns=['Label']).values
+    y = df['Label'].values
     X = np.nan_to_num(X)
     X = np.clip(X, -1e10, 1e10)
-
     # Chia train/test
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=test_size, stratify=y, random_state=random_state
     )
-
     # Chuẩn hóa
     scaler = StandardScaler()
     X_train = scaler.fit_transform(X_train)
     X_test = scaler.transform(X_test)
-
     # ANOVA chọn đặc trưng
     selector = SelectKBest(f_classif, k=min(k_features, X.shape[1]))
     X_train = selector.fit_transform(X_train, y_train)
     X_test = selector.transform(X_test)
-
     trainset = TensorDataset(torch.tensor(X_train, dtype=torch.float32),
                              torch.tensor(y_train, dtype=torch.long))
     testset = TensorDataset(torch.tensor(X_test, dtype=torch.float32),
@@ -92,7 +123,7 @@ def partition_noniid(trainset, num_clients=5, num_classes=None, alpha=1, seed=42
 
 
 # ✅ Load partition theo client
-def load_partition(client_id, num_clients=5, k_features=30, noniid=False, alpha=0.5):
+def load_partition(client_id, num_clients=5, k_features=60, noniid=False, alpha=0.5):
     trainset, testset, num_classes = load_dataset(k_features=k_features)
     
     if noniid:
