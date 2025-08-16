@@ -7,24 +7,24 @@ import torch
 from torch.utils.data import TensorDataset, Subset
 from collections import Counter
 
-# ✅ Trả về số lớp chuẩn
+# Trả về số lớp chuẩn
 def get_num_classes():
     df = pd.read_csv("IoTDIAD_sum.csv")
-    print("Các cột trong file:", df.columns.tolist())  # In ra tên các cột để debug
     if "Label" in df.columns:
         labels = LabelEncoder().fit_transform(df["Label"])
         return len(set(labels))
     else:
         raise KeyError("Không tìm thấy cột 'Label' trong file CSV. Các cột hiện có: {}".format(df.columns.tolist()))
 
-# ✅ Load dataset chuẩn
-def load_dataset(k_features=60, test_size=0.2, random_state=42):
+# Load dataset chuẩn
+def load_dataset(k_features=30, test_size=0.2, random_state=42):
     df = pd.read_csv("IoTDIAD_sum.csv")
+    # Loại bỏ cột 'FlowID' nếu tồn tại
+    if 'Flow ID' in df.columns:
+        df = df.drop(columns=['Flow ID'])
 
     numeric_cols = [col for col in df.columns if df[col].dtype in ['int64', 'float64']]
     categorical_cols = [col for col in df.columns if col not in numeric_cols]
-    print("Numeric columns:", numeric_cols)
-    print("Categorical columns:", categorical_cols)
     
     object_cols = df.select_dtypes(include=['object']).columns.tolist()
     if 'Label' in object_cols:
@@ -83,13 +83,19 @@ def load_dataset(k_features=60, test_size=0.2, random_state=42):
     selector = SelectKBest(f_classif, k=min(k_features, X.shape[1]))
     X_train = selector.fit_transform(X_train, y_train)
     X_test = selector.transform(X_test)
+    # In ra danh sách các feature đã được chọn
+    feature_names = df.drop(columns=['Label']).columns
+    selected_features = feature_names[selector.get_support(indices=True)]
+    print("\n[Feature Selection] Các feature được chọn:")
+    for i, feat in enumerate(selected_features):
+        print(f"  {i+1}. {feat}")
     trainset = TensorDataset(torch.tensor(X_train, dtype=torch.float32),
                              torch.tensor(y_train, dtype=torch.long))
     testset = TensorDataset(torch.tensor(X_test, dtype=torch.float32),
                             torch.tensor(y_test, dtype=torch.long))
     return trainset, testset, len(np.unique(y))
 
-# ✅ Partition Non-IID với Dirichlet
+# Partition Non-IID với Dirichlet
 def partition_noniid(trainset, num_clients=5, num_classes=None, alpha=1, seed=42):
     np.random.seed(seed)
     labels = np.array([y.item() for _, y in trainset])
@@ -108,8 +114,8 @@ def partition_noniid(trainset, num_clients=5, num_classes=None, alpha=1, seed=42
         for cid, idx_split in enumerate(split_class):
             client_dict[cid].extend(idx_split)
 
-    # 📌 Thống kê dữ liệu cho từng client
-    print("\n📊 [Non-IID Partition Statistics]")
+    # Thống kê dữ liệu cho từng client
+    print("\n[Non-IID Partition Statistics]")
     for cid in client_dict:
         client_labels = labels[client_dict[cid]]
         unique, counts = np.unique(client_labels, return_counts=True)
@@ -122,8 +128,8 @@ def partition_noniid(trainset, num_clients=5, num_classes=None, alpha=1, seed=42
     return client_dict
 
 
-# ✅ Load partition theo client
-def load_partition(client_id, num_clients=5, k_features=60, noniid=False, alpha=0.5):
+# Load partition theo client
+def load_partition(client_id, num_clients=5, k_features=30, noniid=False, alpha=0.5):
     trainset, testset, num_classes = load_dataset(k_features=k_features)
     
     if noniid:
@@ -134,11 +140,11 @@ def load_partition(client_id, num_clients=5, k_features=60, noniid=False, alpha=
         split = np.array_split(all_idx, num_clients)
         client_trainset = Subset(trainset, split[client_id])
 
-    # ✅ Đếm số lượng record và tỷ lệ class
+    # Đếm số lượng record và tỷ lệ class
     labels = [trainset[i][1].item() for i in client_trainset.indices]
     class_dist = Counter(labels)
     total = len(labels)
-    print(f"\n📊 [Client {client_id}] Records: {total}")
+    print(f"\n[Client {client_id}] Records: {total}")
     for c, count in class_dist.items():
         print(f"  - Class {c}: {count} ({count/total:.2%})")
     

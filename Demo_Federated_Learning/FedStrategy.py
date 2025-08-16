@@ -169,7 +169,7 @@ class FedProxStrategy(fl.server.strategy.Strategy):
         return ndarrays_to_parameters(self.model_params)
 
     def configure_fit(self, server_round, parameters, client_manager):
-        # ✅ Chờ cho đến khi có ít nhất 1 client
+        # Chờ cho đến khi có ít nhất 1 client
         while client_manager.num_available() == 0:
             print("[Server] Waiting for clients to connect...")
             time.sleep(2)
@@ -192,7 +192,7 @@ class FedProxStrategy(fl.server.strategy.Strategy):
             weights_list.append(local_w)
 
         total = sum(sizes)
-        # ✅ Trung bình có trọng số
+        # Trung bình có trọng số
         new_w = [
             sum(w[i] * (n / total) for w, n in zip(weights_list, sizes))
             for i in range(len(weights_list[0]))
@@ -214,10 +214,10 @@ class FedProxStrategy(fl.server.strategy.Strategy):
             for k, v in res.metrics.items():
                 metrics_all.setdefault(k, []).append(v)
 
-        # ✅ Trung bình các metrics
+        # Trung bình các metrics
         metrics_avg = {k: float(np.mean(v)) for k, v in metrics_all.items()}
 
-        # ✅ Log tất cả metrics
+        # Log tất cả metrics
         print(f"\n[Round {server_round}] Evaluation Metrics (FedProx):")
         for k, v in metrics_avg.items():
             print(f"  {k}: {v:.4f}")

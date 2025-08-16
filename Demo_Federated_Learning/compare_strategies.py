@@ -11,7 +11,7 @@ from init_model_weights import model_init_fn
 
 
 SERVER_ADDRESS = "127.0.0.1:9091"
-NUM_ROUNDS = 16
+NUM_ROUNDS = 20
 NUM_CLIENTS = 5
 
 
